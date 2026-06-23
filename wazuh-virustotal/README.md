@@ -37,18 +37,18 @@ This architecture utilizes a dual-layer reporting system:
 1. **Technical Reporting (Python):** The Active Response script autonomously generates a PDF receipt the instant a file is quarantined, detailing the file path, VT detection rate, and a clickable analysis hyperlink.
 2. **OpenSearch Telemetry (Wazuh):**  Visual dashboards and CSV exports generated via OpenSearch, allowing SOC managers to review threat trends over time.
 
+## Full Alerts Reports
+The raw CSV telemetry and the automatically generated tactical PDFs for this incident simulation can be found in the `reports/` directory of this repository:
+
+* [Technical Python Incident Report (PDF)](./reports/Incident_Report_kali_20260622_193424.pdf)
+* [Wazuh Dashboard OpenSearch Telemetry (CSV)](./reports/Critical%20MITRE%20T1036%20PDF%20Alerts.csv)
+
 ## Key Findings
 During the simulation, the pipeline performed exactly as engineered:
 * The disguised payload (Q3_Audit_Report.pdf) was detected within seconds of hitting the disk.
 * The Wazuh Manager successfully pulled a 61/65 malicious detection rate from VirusTotal.
 * The custom Level 15 rule triggered, immediately deploying the Python killswitch.
 * The script successfully moved the payload to a root-owned kernel vault (/var/ossec/quarantine) and successfully stripped all execution privileges (chmod 000), neutralizing the threat without human intervention
-
-## Full Alerts Reports
-The raw CSV telemetry and the automatically generated tactical PDFs for this incident simulation can be found in the `reports/` directory of this repository:
-
-* [Technical Python Incident Report (PDF)](./reports/Incident_Report_kali_20260622_193424.pdf)
-* [Wazuh Dashboard OpenSearch Telemetry (CSV)](./reports/Critical%20MITRE%20T1036%20PDF%20Alerts.csv)
 
 ## Screenshots
 
