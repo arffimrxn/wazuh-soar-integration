@@ -1,54 +1,62 @@
 # VirusTotal API & Automated Malware Containment (SOAR)
 
 ## Project Overview
-This project demonstrates a fully functional Security Orchestration, Automation, and Response (SOAR) pipeline engineered within Wazuh XDR. The architecture is designed to automatically intercept malicious file drops, query their cryptographic hashes against global threat intelligence databases, and autonomously execute a custom Python killswitch. This killswitch physically isolates the threat and generates a tactical incident report, reducing the time to remediation from minutes to milliseconds.
+This project implements a Security Orchestration, Automation, and Response (SOAR) pipeline built within Wazuh XDR. The pipeline detects newly dropped files, checks their hashes against VirusTotal's threat intelligence database, and automatically triggers a Python response script that quarantines the file and generates an incident report — bringing time-to-remediation down to seconds with no human intervention.
 
 ## Tools Used
 * **Wazuh XDR:** Core SIEM, File Integrity Monitoring (FIM), and Active Response engine.
-* **VirusTotal API:** External Threat Intelligence integration for hash verification.
-* **Python 3:** Automation scripting, utilizing the `fpdf` library for dynamic reporting.
-* **OpenSearch / Wazuh Dashboard:** Log aggregation, JSON telemetry parsing, and strategic reporting.
-* **Linux (Debian/Kali):** Endpoint simulation and kernel-level file permission management.
+* **VirusTotal API:** External threat intelligence integration for hash lookups.
+* **Python 3:** Active Response scripting, using the `fpdf` library for report generation.
+* **OpenSearch / Wazuh Dashboard:** Log aggregation, JSON telemetry parsing, and dashboards.
+* **Linux (Debian/Kali):** Endpoint simulation and file-permission handling.
 
 ## Project Steps
-1. **FIM Configuration:** Configured Wazuh's File Integrity Monitoring to monitor the `/Downloads` directory in real-time for new file creation.
-2. **API Integration:** Embedded a VirusTotal API key into the Wazuh manager (`ossec.conf`) to automatically cross-reference hashes of newly dropped files.
-3. **Detection Engineering:** Authored a custom XML detection rule mapped to **MITRE ATT&CK T1036 (Masquerading)** to specifically flag malicious files attempting to disguise themselves as PDFs.
-4. **Active Response Scripting:** Developed a Python-based execution engine (`quarantine-killswitch.py`) that triggers upon detection.
-5. **Attack Simulation:** Deployed an EICAR test string disguised as a financial document (`Q3_Audit_Report.pdf`) to test the complete detection-to-remediation pipeline.
+1. **FIM Configuration:** Configured Wazuh File Integrity Monitoring to watch the `/Downloads` directory in real time for new file creation.
+2. **API Integration:** Added a VirusTotal API key to the Wazuh manager (`ossec.conf`) to automatically look up the hashes of newly dropped files.
+3. **Detection Engineering:** Authored a custom XML rule mapped to **MITRE ATT&CK T1036.008 (Masquerade File Type)** to flag malicious files disguised with a `.pdf` extension.
+4. **Active Response Scripting:** Developed a Python response script (`quarantine-killswitch.py`) that triggers on detection.
+5. **Attack Simulation:** Dropped an EICAR test string renamed as a financial document (`Q3_Audit_Report.pdf`) to exercise the full detection-to-remediation pipeline.
+
+> **Note on test payload:** This simulation uses the [EICAR test file](https://www.eicar.org/download-anti-malware-testfile/) — a standard, harmless string every AV engine detects by design — rather than live malware. The near-total VirusTotal detection rate reflects that EICAR is universally flagged; the point of the test is to validate the *pipeline*, not the sample.
 
 ## Analysis
-The core of the detection logic relies on a custom Wazuh rule (Level 15 - Critical). To detect the masquerading technique, the rule leverages a PCRE2 regular expression:
+The detection relies on a custom Wazuh rule (Level 15 — Critical). It fires when VirusTotal returns a malicious verdict (parent rule `87105`) **and** the reported filename ends in `.pdf`, using a PCRE2 regular expression:
+
 ```xml
 <rule id="100002" level="15">
     <if_sid>87105</if_sid>
     <field name="virustotal.source.file" type="pcre2">(?i)\.pdf$</field>
-    <description>CRITICAL: MITRE T1036 - Malicious payload disguised as a PDF document detected!</description>
+    <description>CRITICAL: MITRE T1036.008 - Malicious payload disguised as a PDF document detected!</description>
     <mitre>
-      <id>T1036.004</id>
+      <id>T1036.008</id>
     </mitre>
-  </rule>
+</rule>
 ```
-This forces the engine to parse the incoming JSON telemetry and trigger only if the malicious payload explicitly attempts to hide behind a .pdf extension, regardless of capitalization. Furthermore, the Python script utilizes a "waterfall" hash extraction method, searching the nested JSON tree for a SHA-256 hash first, then back to SHA-1 or MD5 to ensure the threat intelligence hyperlink is always generated.
 
-## Reporting 
-This architecture utilizes a dual-layer reporting system:
+The engine parses the incoming JSON telemetry and triggers only when the flagged payload carries a `.pdf` extension, regardless of capitalization (the `(?i)` flag). The end-of-string anchor (`$`) ensures only files *ending* in `.pdf` match, which avoids false positives on filenames that merely contain the string.
 
-1. **Technical Reporting (Python):** The Active Response script autonomously generates a PDF receipt the instant a file is quarantined, detailing the file path, VT detection rate, and a clickable analysis hyperlink.
-2. **OpenSearch Telemetry (Wazuh):**  Visual dashboards and CSV exports generated via OpenSearch, allowing SOC managers to review threat trends over time.
+The Python script uses a fallback hash-extraction method, searching the nested JSON for a SHA-256 hash first, then falling back to SHA-1 or MD5, so the VirusTotal analysis link is always generated.
 
-## Full Alerts Reports
-The raw CSV telemetry and the automatically generated tactical PDFs for this incident simulation can be found in the `reports/` directory of this repository:
+> **Scope note:** This rule alerts on a *known-bad hash that happens to carry a PDF extension*. Detecting the masquerade itself — a file *claiming* to be a PDF whose actual content/magic bytes say otherwise — is a separate check (comparing declared extension against content-derived type). That extension-vs-magic-byte comparison is on the roadmap below.
 
-* [Technical Python Incident Report (PDF)](./reports/Incident_Report_kali_20260622_193424.pdf)
-* [Wazuh Dashboard OpenSearch Telemetry (CSV)](./reports/Critical%20MITRE%20T1036%20PDF%20Alerts.csv)
+## Reporting
+The architecture produces two layers of reporting:
+
+1. **Technical report (Python):** The Active Response script generates a PDF the moment a file is quarantined, recording the file path, VirusTotal detection rate, and a clickable analysis link.
+2. **OpenSearch telemetry (Wazuh):** Dashboards and CSV exports from OpenSearch for reviewing threat trends over time.
+
+## Full Alert Reports
+The raw CSV telemetry and the generated PDF for this simulation are in the `reports/` directory:
+
+* [Python Incident Report (PDF)](./reports/Incident_Report_kali_20260622_193424.pdf)
+* [Wazuh / OpenSearch Telemetry (CSV)](./reports/Critical%20MITRE%20T1036%20PDF%20Alerts.csv)
 
 ## Key Findings
-During the simulation, the pipeline performed exactly as engineered:
-* The disguised payload (Q3_Audit_Report.pdf) was detected within seconds of hitting the disk.
-* The Wazuh Manager successfully pulled a 61/65 malicious detection rate from VirusTotal.
-* The custom Level 15 rule triggered, immediately deploying the Python killswitch.
-* The script successfully moved the payload to a root-owned kernel vault (/var/ossec/quarantine) and successfully stripped all execution privileges (chmod 000), neutralizing the threat without human intervention
+During the simulation the pipeline behaved as designed:
+* The disguised payload (`Q3_Audit_Report.pdf`) was detected within seconds of hitting disk.
+* The Wazuh manager pulled a 61/65 malicious detection rate from VirusTotal.
+* The custom Level 15 rule triggered and invoked the Python response script.
+* The script moved the payload to a root-owned quarantine directory (`/var/ossec/quarantine`) and stripped all permissions (`chmod 000`), neutralizing the file without human intervention.
 
 ## Screenshots
 
@@ -56,47 +64,48 @@ During the simulation, the pipeline performed exactly as engineered:
 ![Main Dashboard](images/01_dashboard_main.png)
 *High-level view of the Wazuh security events dashboard and agent status.*
 
-### 2. Critical Alert Trigger (MITRE T1036)
+### 2. Critical Alert Trigger (MITRE T1036.008)
 ![Critical Alert](images/02_dashboard_cricical_alert.png)
-*Custom Level 15 rule triggering on the spear-phishing simulation.*
+*Custom Level 15 rule triggering on the malicious file drop.*
 
 ### 3. Alert Table Logs
 ![Alert Logs](images/03_alert_table_logs.png)
-*Tabular view of the security events log capturing the malicious file drop and initial VirusTotal hits.*
+*Tabular view of the security events log capturing the file drop and initial VirusTotal hits.*
 
 ### 4. Raw JSON Telemetry Parse
 ![Raw JSON](images/04_raw_json_telemetry.png)
-*OpenSearch telemetry capturing the exact PCRE2 regex hit and nested API data.*
+*OpenSearch telemetry showing the PCRE2 regex hit and nested API data.*
 
-### 5. Quarantine Vault Validation
-![Quarantine Vault](images/05_quarantine_vault.png)
-*Verification of the automated mitigation. Payload is isolated into a root-owned directory with all permissions successfully revoked (`000`).*
+### 5. Quarantine Directory Validation
+![Quarantine Directory](images/05_quarantine_vault.png)
+*Verification of the automated response: the payload is isolated in a root-owned directory with all permissions revoked (`000`).*
 
 ### 6. Terminal Execution Pipeline
 ![Terminal Execution](images/06_terminal_execution.png)
-*Real-time log monitoring showing the Active Response script firing and executing the containment lockdown.*
+*Real-time log monitoring showing the Active Response script firing and executing the containment step.*
 
 ### 7. Automated Technical PDF Report
 ![Technical PDF](images/05_technical_pdf_report.png)
-*The dynamically generated PDF compiled by the Python Active Response engine detailing the file path, VT detection rate, and clickable analysis hyperlink.*
+*The PDF generated by the Python response script: file path, VirusTotal detection rate, and clickable analysis link.*
 
 ### 8. Wazuh Manager API Integration
 ![Wazuh Configuration](images/07_wazuh_vt_config.png)
-*Native XML API connector bridging internal FIM alerts with external threat intelligence.*
+*XML API connector bridging internal FIM alerts with external threat intelligence.*
 
 ### 9. VirusTotal Portal Verification
 ![VirusTotal Portal](images/08_virustotal_portal.png)
-*Global threat database matching for the payload hash, validating the SOC alert ecosystem.*
+*VirusTotal matching the payload hash, confirming the alert.*
 
 ## Lessons Learned
-* **Environment Sandboxing:** Bypassing strict PEP-668 Python environment restrictions required injecting the fpdf library directly into Wazuh's isolated, embedded framework rather than relying on global system packages.
-* **JSON Complexity:** Parsing Wazuh's deeply nested alert JSON required building defensive, fault-tolerant Python logic (using .get()) to prevent the script from crashing if an expected key was missing.
-* **Regex Precision:** Ensuring the End-of-String anchor ($) was utilized in the PCRE2 regex was critical to preventing false positives and ensuring only true .pdf masquerades were flagged.
+* **Environment sandboxing:** Working around PEP-668 Python environment restrictions required installing the `fpdf` library into Wazuh's isolated, embedded framework rather than using global system packages.
+* **JSON complexity:** Parsing Wazuh's deeply nested alert JSON required defensive, fault-tolerant Python (using `.get()`) so the script wouldn't crash when an expected key was missing.
+* **Regex precision:** Using the end-of-string anchor (`$`) in the PCRE2 pattern was important for preventing false positives and matching only true `.pdf` filenames.
 
 ## Next Steps
-To further harden this SOC architecture, the following integrations are planned for future repository updates:
+Planned additions to harden this architecture:
 
-* **Shodan Integration:** Automating external attack surface monitoring to correlate internal alerts with exposed public-facing vulnerabilities.
-* **YARA Rules:** Expanding detection capabilities beyond simple hash lookups by deploying custom YARA signatures to scan files for specific malware byte patterns and strings at the endpoint level.
+* **Content-vs-extension detection:** Add a check that compares a file's declared extension against its content-derived type (magic bytes), to detect file-type masquerading independently of the VirusTotal verdict — a truer implementation of T1036.008.
+* **Shodan integration:** Correlate internal alerts with exposed public-facing services to add external attack-surface context.
+* **YARA rules:** Move beyond hash lookups with custom YARA signatures that scan files for specific malware byte patterns and strings at the endpoint.
 
-**Disclaimer:** All malware simulations, API integrations, and Active Response executions demonstrated in this repository were conducted within a safely isolated and strictly controlled virtual environment. No production systems or external networks were exposed to malicious payloads during the development of this architecture.
+**Disclaimer:** All malware simulations, API integrations, and Active Response executions in this repository were conducted in an isolated, controlled virtual environment. No production systems or external networks were exposed to any payload during development.
