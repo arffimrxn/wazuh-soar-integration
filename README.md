@@ -1,26 +1,27 @@
 # Wazuh Security Operations & SOAR Integrations
 
 ## Overview
-This repository serves as a centralized engineering portfolio for custom **Security Orchestration, Automation, and Response (SOAR)** architectures built within the Wazuh XDR platform. 
+This repository is a growing collection of custom **Security Orchestration, Automation, and Response (SOAR)** integrations built within the Wazuh XDR platform.
 
-The primary objective of this monorepo is to demonstrate applied, mid-to-senior level Security Operations Center (SOC) capabilities, including custom detection engineering mapped to the MITRE ATT&CK framework, external Threat Intelligence integration, and the development of automated Python-based remediation pipelines.
+The goal is to demonstrate applied Security Operations Center (SOC) and detection-engineering work: custom detection rules mapped to the MITRE ATT&CK framework, external threat-intelligence integration, and automated Python-based response pipelines. Each project is self-contained, with its own documentation, scripts, and evidence.
 
 ## Repository Architecture
-This is structured as a monorepo to house multiple independent SIEM/SOAR integrations. Each project directory contains its own detailed technical documentation, scripts, and visual evidence of the architecture in action.
+This is structured as a monorepo so that multiple independent SIEM/SOAR integrations can live alongside each other. Each project directory contains its own technical write-up, scripts, and screenshots of the architecture in action.
 
 ### Current Projects
+- **[1. VirusTotal API & Automated Malware Containment](./wazuh-virustotal)**
+  * **Focus:** Malicious file drops, threat-intelligence API integration, Active Response.
+  * **Description:** A closed-loop SOAR pipeline that detects new file drops, checks their hashes against the VirusTotal API, and triggers a Python response script that quarantines the file and strips its permissions (`chmod 000`). Includes a custom detection rule mapped to **MITRE ATT&CK T1036.008 (Masquerade File Type)** and automated PDF incident reporting.
 
-* **[1. VirusTotal API & Automated Malware Containment](./wazuh-virustotal)**
-    * **Focus:** Zero-Day File Drops, API Integration, Active Response.
-    * **Description:** A closed-loop SOAR pipeline that intercepts file drops, verifies cryptographic hashes via the VirusTotal API, and autonomously executes a Python-based killswitch to quarantine payloads and strip execution permissions (`chmod 000`). Features custom **MITRE T1036 (Masquerading)** detection rules and automated tactical PDF reporting.
-
----
+### Roadmap
+More integrations are in progress and will be added here, 
 
 ## Core Capabilities Demonstrated
-* **Detection Engineering:** Authoring and tuning custom XML decoders and rules using PCRE2 regex to detect sophisticated evasion techniques.
-* **Automated Remediation (SOAR):** Bypassing strict Python environments to engineer Active Response scripts that execute OS-level lockdowns.
-* **Threat Intelligence:** Bridging internal File Integrity Monitoring (FIM) alerts with global, crowdsourced data via REST APIs.
-* **Forensic Reporting:** Translating raw JSON OpenSearch telemetry into executive-ready incident reports and dashboards.
+- **Detection Engineering:** Writing and tuning custom Wazuh XML decoders and rules with PCRE2 regex to detect evasion techniques.
+- **Automated Response (SOAR):** Building Active Response scripts that carry out filesystem-level containment on detection.
+- **Threat Intelligence:** Bridging internal File Integrity Monitoring (FIM) alerts with external data via REST APIs.
+- **Reporting:** Turning raw OpenSearch JSON telemetry into readable incident reports and dashboards.
 
 ---
-*Note: Sensitive API keys, environment variables, and specific localized infrastructure data have been sanitized from these configurations prior to publishing.*
+
+*Note: API keys, environment variables, and local infrastructure details have been removed from these configurations prior to publishing.*
